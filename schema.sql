@@ -1,6 +1,7 @@
 ﻿-- ============================================================
 -- 习惯打卡 · Supabase 建表脚本
 -- 用法：在 Supabase 控制台 -> SQL Editor 中新建查询，粘贴本文件全部内容后运行。
+-- 本脚本可以安全地重复运行（幂等），重复运行不会报错。
 -- ============================================================
 
 -- 习惯表
@@ -39,6 +40,21 @@ create policy "checkins insert" on public.checkins for insert with check (true);
 drop policy if exists "checkins delete" on public.checkins;
 create policy "checkins delete" on public.checkins for delete using (true);
 
--- 开启实时同步（多设备自动刷新用）
-alter publication supabase_realtime add table public.habits;
-alter publication supabase_realtime add table public.checkins;
+-- 开启实时同步（多设备自动刷新用；已加入过的表会跳过，不会报错）
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public' and tablename = 'habits'
+  ) then
+    execute 'alter publication supabase_realtime add table public.habits';
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public' and tablename = 'checkins'
+  ) then
+    execute 'alter publication supabase_realtime add table public.checkins';
+  end if;
+end $$;
