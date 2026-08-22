@@ -191,3 +191,51 @@ body {
 }
 
 .hidden { display: none !important; }
+
+/* ---------- 登录 / 注册 ---------- */
+.auth-view {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px 20px;
+}
+.auth-card {
+  background: #fff; border-radius: 22px; padding: 34px 28px 26px;
+  width: 100%; max-width: 380px;
+  box-shadow: 0 10px 40px rgba(20, 60, 40, 0.12);
+  text-align: center;
+  animation: fadeIn 0.2s ease;
+}
+.auth-logo { font-size: 52px; line-height: 1; }
+.auth-title { font-size: 24px; font-weight: 700; margin-top: 10px; letter-spacing: 1px; }
+.auth-sub { color: var(--text-sub); font-size: 14px; margin-top: 6px; }
+.auth-field { text-align: left; margin-top: 16px; }
+.auth-field label { display: block; font-size: 13px; color: var(--text-sub); margin-bottom: 6px; }
+.auth-field input {
+  width: 100%; border: 1px solid #dbe7e0; border-radius: 10px;
+  padding: 11px 12px; font-size: 15px; outline: none;
+}
+.auth-field input:focus { border-color: var(--accent); }
+.auth-error {
+  margin-top: 14px; padding: 9px 12px; border-radius: 10px;
+  background: #fdf0f0; color: var(--danger); font-size: 13px; text-align: left;
+}
+.btn-block { width: 100%; margin-top: 18px; padding: 12px 0; border-radius: 12px; font-size: 16px; }
+.btn-block:disabled { opacity: 0.6; cursor: not-allowed; }
+.auth-links { margin-top: 16px; font-size: 14px; }
+.auth-links a { color: var(--accent-dark); text-decoration: none; }
+.auth-links a:hover { text-decoration: underline; }
+.auth-sep { color: #c9d6cf; margin: 0 6px; }
+
+/* ---------- 顶部账号栏 ---------- */
+.account-bar {
+  max-width: 640px; margin: 0 auto; padding: 18px 20px 0;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+.account-email { color: var(--text-sub); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-logout {
+  border: 1px solid #dbe7e0; background: #fff; color: var(--text);
+  border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-logout:hover { background: #f0f5f2; }

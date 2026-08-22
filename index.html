@@ -7,37 +7,68 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div class="page">
-    <header class="header">
-      <div class="header-top">
-        <div>
-          <h1 class="title">习惯打卡</h1>
-          <p class="date" id="dateLabel"></p>
+  <div class="config-banner hidden" id="configBanner">
+    还没连接到数据库：请先在 <code>js/config.js</code> 中填入 Supabase 项目的 URL 和 anon key（见 README）。
+  </div>
+
+  <!-- 登录 / 注册视图 -->
+  <div class="auth-view" id="authView">
+    <div class="auth-card">
+      <div class="auth-logo">🌱</div>
+      <h1 class="auth-title">习惯打卡</h1>
+      <p class="auth-sub" id="authSub">登录后继续坚持你的习惯</p>
+      <div class="auth-field">
+        <label for="authEmail">邮箱</label>
+        <input id="authEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="auth-field">
+        <label for="authPassword" id="authPasswordLabel">密码</label>
+        <input id="authPassword" type="password" placeholder="至少 6 位" autocomplete="current-password" />
+      </div>
+      <div class="auth-error hidden" id="authError"></div>
+      <button class="btn-primary btn-block" id="authSubmit">登录</button>
+      <div class="auth-links" id="authLinks">
+        <a href="#" id="authForgot">忘记密码？</a>
+        <span class="auth-sep">·</span>
+        <a href="#" id="authToggle">没有账号？去注册</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主应用视图 -->
+  <div class="hidden" id="appView">
+    <div class="account-bar">
+      <span class="account-email" id="accountEmail"></span>
+      <button class="btn-logout" id="btnLogout">退出登录</button>
+    </div>
+    <div class="page">
+      <header class="header">
+        <div class="header-top">
+          <div>
+            <h1 class="title">习惯打卡</h1>
+            <p class="date" id="dateLabel"></p>
+          </div>
+          <button class="btn-add" id="btnAdd" aria-label="添加习惯" title="添加习惯">+</button>
         </div>
-        <button class="btn-add" id="btnAdd" aria-label="添加习惯" title="添加习惯">+</button>
-      </div>
 
-      <div class="progress-card">
-        <div class="progress-text">
-          <span id="progressText">今天完成 0 / 0</span>
-          <span class="progress-pct" id="progressPct"></span>
+        <div class="progress-card">
+          <div class="progress-text">
+            <span id="progressText">今天完成 0 / 0</span>
+            <span class="progress-pct" id="progressPct"></span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
         </div>
-        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-      </div>
+      </header>
 
-      <div class="config-banner hidden" id="configBanner">
-        还没连接到数据库：请先在 <code>js/config.js</code> 中填入 Supabase 项目的 URL 和 anon key（见 README）。
-      </div>
-    </header>
-
-    <main>
-      <ul class="habit-list" id="habitList"></ul>
-      <div class="empty hidden" id="emptyState">
-        <div class="empty-emoji">🌱</div>
-        <p>还没有习惯</p>
-        <p class="empty-hint">点击右上角 + 添加第一个吧，例如：喝水、运动、读书</p>
-      </div>
-    </main>
+      <main>
+        <ul class="habit-list" id="habitList"></ul>
+        <div class="empty hidden" id="emptyState">
+          <div class="empty-emoji">🌱</div>
+          <p>还没有习惯</p>
+          <p class="empty-hint">点击右上角 + 添加第一个吧，例如：喝水、运动、读书</p>
+        </div>
+      </main>
+    </div>
   </div>
 
   <!-- 添加习惯弹窗 -->
