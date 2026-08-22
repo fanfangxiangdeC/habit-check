@@ -316,3 +316,18 @@ input { font-family: inherit; }
   flex-shrink: 0; transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .btn-logout:hover { color: var(--ink); border-color: rgba(28,43,36,0.22); background: #faf9f6; }
+
+/* ---------- 拖动排序（v3） ---------- */
+.habit-card { gap: 12px; }
+.drag-handle {
+  color: var(--ink-3); font-size: 14px; line-height: 1; letter-spacing: -2px;
+  cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
+  padding: 10px 3px; margin-left: -4px; flex-shrink: 0;
+  display: flex; align-items: center;
+  transition: color 0.15s ease;
+}
+.drag-handle:hover { color: var(--ink); }
+.drag-handle:active { cursor: grabbing; }
+.sortable-ghost { opacity: 0.45; background: var(--accent-tint); }
+.sortable-chosen { box-shadow: var(--shadow-pop); }
+.sortable-drag { opacity: 0.95; }

@@ -1,4 +1,4 @@
-﻿/* ===== 习惯打卡 · 页面逻辑（v2：登录 + 同步队列修复快速连点） ===== */
+﻿/* ===== 习惯打卡 · 页面逻辑（v3：增量渲染防闪烁 + 拖动排序优先级） ===== */
 (() => {
   'use strict';
 
@@ -17,13 +17,15 @@
   const EMOJI_PRESETS = ['💧', '🏃', '📚', '🧘', '🥗', '💪', '😴', '🎯', '🚶', '🦷'];
 
   // ---------- 状态 ----------
-  let habits = [];                       // [{id, name, emoji, created_at}]
+  let habits = [];                       // [{id, name, emoji, sort_order, created_at}]
   let checkins = new Map();              // habit_id -> Set('YYYY-MM-DD')
   let todayKey = fmtDate(new Date());
   let currentUser = null;                // {id, email}
   let loadEpoch = 0;                     // 拉取纪元：本地有改动就作废在途请求
   const syncQueues = new Map();          // habit_id -> Promise 链
   const pendingSync = new Set();         // 正在同步的习惯
+  let sortable = null;                   // SortableJS 实例
+  let reloadTimer = null;                // 实时/聚焦事件防抖
   let authMode = 'login';                // login | register | reset
   let authSubmitted = false;
   let realtimeReady = false;
@@ -104,10 +106,15 @@
 
   function invalidateLoads() { loadEpoch++; }
 
-  // ---------- 渲染 ----------
+  // ---------- 渲染（增量：复用卡片节点，只更新变化的部分，避免整列表重建闪烁） ----------
   function render() {
     elDate.textContent = dateLabelText();
+    updateProgress();
+    elEmpty.classList.toggle('hidden', habits.length > 0);
+    reconcileList();
+  }
 
+  function updateProgress() {
     const done = habits.filter((h) => (checkins.get(h.id) || new Set()).has(todayKey)).length;
     const total = habits.length;
     elProgressText.textContent = `今天完成 ${done} / ${total}`;
@@ -115,11 +122,34 @@
     elProgressPct.textContent = total === 0 ? '' : `${pct}%`;
     elProgressFill.style.width = `${pct}%`;
     elProgressFill.classList.toggle('full', total > 0 && done === total);
+  }
 
-    elEmpty.classList.toggle('hidden', habits.length > 0);
+  function reconcileList() {
+    const wanted = new Set(habits.map((h) => h.id));
+    // 移除已不存在的卡片
+    for (const li of [...elList.children]) {
+      if (!wanted.has(li.dataset.id)) li.remove();
+    }
+    // 按顺序放置；已存在的卡片只更新内容，不重建
+    const byId = new Map();
+    for (const li of elList.children) byId.set(li.dataset.id, li);
 
-    elList.innerHTML = '';
-    for (const h of habits) elList.appendChild(renderCard(h));
+    let prev = null;
+    for (const h of habits) {
+      let li = byId.get(h.id);
+      if (!li) {
+        li = renderCard(h);
+        byId.set(h.id, li);
+      } else {
+        updateCard(li, h);
+      }
+      if (prev) {
+        if (li.nextSibling !== prev) prev.after(li);
+      } else if (elList.firstChild !== li) {
+        elList.prepend(li);
+      }
+      prev = li;
+    }
   }
 
   function renderCard(h) {
@@ -127,23 +157,17 @@
     li.className = 'habit-card';
     li.dataset.id = h.id;
 
-    const doneSet = checkins.get(h.id) || new Set();
-    const checked = doneSet.has(todayKey);
-    const streak = calcStreak(h.id, doneSet);
-    const dots = last7Days()
-      .map((k) => `<i class="dot${doneSet.has(k) ? ' on' : ''}"></i>`)
-      .join('');
-
     li.innerHTML = `
+      <span class="drag-handle" title="拖动排序">⋮⋮</span>
       <div class="habit-emoji">${escapeHtml(h.emoji || '📌')}</div>
       <div class="habit-info">
         <div class="habit-name" title="点击重命名">${escapeHtml(h.name)}</div>
         <div class="habit-meta">
-          <span class="streak">🔥 ${streak} 天</span>
-          <span class="dots">${dots}</span>
+          <span class="streak"></span>
+          <span class="dots"></span>
         </div>
       </div>
-      <button class="check-btn${checked ? ' checked' : ''}" aria-label="${checked ? '取消完成' : '标记完成'}">${checked ? '✓' : ''}</button>
+      <button class="check-btn" aria-label="标记完成"></button>
       <button class="menu-btn" aria-label="更多操作">⋯</button>
       <div class="menu hidden">
         <button class="menu-item" data-action="rename">重命名</button>
@@ -167,7 +191,39 @@
       closeAllMenus();
     });
 
+    updateCard(li, h);
     return li;
+  }
+
+  // 只更新有变化的部分；节点引用保持不变（不触发重排/动画）
+  function updateCard(li, h) {
+    const doneSet = checkins.get(h.id) || new Set();
+
+    const emojiEl = li.querySelector('.habit-emoji');
+    const emoji = h.emoji || '📌';
+    if (emojiEl.textContent !== emoji) emojiEl.textContent = emoji;
+
+    // 正在重命名时不动名称
+    const nameEl = li.querySelector('.habit-name');
+    if (nameEl && nameEl.textContent !== h.name) nameEl.textContent = h.name;
+
+    const checkBtn = li.querySelector('.check-btn');
+    const checked = doneSet.has(todayKey);
+    if (checkBtn.classList.contains('checked') !== checked) {
+      checkBtn.classList.toggle('checked', checked);
+      checkBtn.textContent = checked ? '✓' : '';
+      checkBtn.setAttribute('aria-label', checked ? '取消完成' : '标记完成');
+    }
+
+    const streakEl = li.querySelector('.streak');
+    const streakText = `🔥 ${calcStreak(h.id, doneSet)} 天`;
+    if (streakEl.textContent !== streakText) streakEl.textContent = streakText;
+
+    const dotsEl = li.querySelector('.dots');
+    const dotsHtml = last7Days()
+      .map((k) => `<i class="dot${doneSet.has(k) ? ' on' : ''}"></i>`)
+      .join('');
+    if (dotsEl.innerHTML !== dotsHtml) dotsEl.innerHTML = dotsHtml;
   }
 
   function closeAllMenus() {
@@ -180,7 +236,9 @@
     const epoch = ++loadEpoch;
     try {
       const [hRes, cRes] = await Promise.all([
-        supabase.from('habits').select('*').order('created_at', { ascending: true }),
+        supabase.from('habits').select('*')
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true }),
         supabase.from('checkins').select('*'),
       ]);
       if (hRes.error) throw hRes.error;
@@ -198,14 +256,14 @@
     }
   }
 
-  // ---------- 勾选/取消（每个习惯一条队列，幂等收敛，修复快速连点） ----------
+  // ---------- 勾选/取消（每个习惯一条队列，幂等收敛，快速连点也不出错） ----------
   function toggleCheck(habitId) {
     if (!supabase || !currentUser) return;
     invalidateLoads();
     let s = checkins.get(habitId);
     if (!s) { s = new Set(); checkins.set(habitId, s); }
     if (s.has(todayKey)) s.delete(todayKey); else s.add(todayKey);
-    render();
+    render(); // 增量：只更新这张卡
     enqueueSync(habitId);
   }
 
@@ -231,18 +289,19 @@
           .delete().eq('habit_id', habitId).eq('date', todayKey);
         if (error) throw error;
       }
+      // 成功：本地状态已与服务器一致，不再重拉（避免闪烁）；其他设备由实时事件同步
     } catch (err) {
       showToast('同步失败：' + err.message);
+      loadData(); // 失败时以服务器为准恢复
     } finally {
       pendingSync.delete(habitId);
-      loadData(); // 以服务器为准重新拉取（新纪元，丢弃旧的过期请求）
     }
   }
 
   // ---------- 添加 / 重命名 / 删除 ----------
   async function addHabit(name, emoji) {
     const { data, error } = await supabase.from('habits')
-      .insert({ name, emoji: emoji || '📌' }).select().single();
+      .insert({ name, emoji: emoji || '📌', sort_order: habits.length }).select().single();
     if (error) throw error;
     invalidateLoads();
     habits.push(data);
@@ -299,6 +358,35 @@
       if (e.key === 'Escape') { done = true; render(); }
     });
     input.addEventListener('blur', commit);
+  }
+
+  // ---------- 拖动排序（优先级） ----------
+  function setupSortable() {
+    if (sortable || !window.Sortable || !supabase) return;
+    sortable = window.Sortable.create(elList, {
+      handle: '.drag-handle',
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      onEnd: async () => {
+        const ids = [...elList.children].map((li) => li.dataset.id);
+        // 本地顺序与界面一致
+        const rank = new Map(ids.map((id, i) => [id, i]));
+        habits.sort((a, b) => rank.get(a.id) - rank.get(b.id));
+        invalidateLoads();
+        try {
+          const results = await Promise.all(ids.map((id, i) =>
+            supabase.from('habits').update({ sort_order: i }).eq('id', id)
+          ));
+          const failed = results.find((r) => r.error);
+          if (failed) throw failed.error;
+        } catch (err) {
+          showToast('排序保存失败：' + err.message);
+          loadData();
+        }
+      },
+    });
   }
 
   // ---------- 弹窗 ----------
@@ -496,14 +584,19 @@
     });
   }
 
-  // ---------- 实时同步 ----------
+  // ---------- 实时同步（防抖：连发合并成一次拉取） ----------
+  function scheduleReload() {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => loadData(), 300);
+  }
+
   function setupRealtime() {
     if (!supabase || realtimeReady) return;
     realtimeReady = true;
     supabase
       .channel('habit-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'habits' }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'checkins' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'habits' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checkins' }, () => scheduleReload())
       .subscribe();
   }
 
@@ -535,8 +628,8 @@
     elAuthPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') onAuthSubmit(); });
     elModal.addEventListener('click', (e) => { if (e.target === elModal) closeModal(); });
     document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) closeAllMenus(); });
-    window.addEventListener('focus', () => { if (document.visibilityState === 'visible') loadData(); });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadData(); });
+    window.addEventListener('focus', () => { if (document.visibilityState === 'visible') scheduleReload(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleReload(); });
   }
 
   function init() {
@@ -547,6 +640,7 @@
       elConfigBanner.classList.remove('hidden');
       return;
     }
+    setupSortable();
     setupRealtime();
     scheduleMidnightRefresh();
     setupAuth();

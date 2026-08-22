@@ -11,6 +11,7 @@ create table if not exists public.habits (
   user_id uuid not null default auth.uid(),
   name text not null,
   emoji text not null default '📌',
+  sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -67,3 +68,5 @@ begin
     execute 'alter publication supabase_realtime add table public.checkins';
   end if;
 end $$;
+
+
