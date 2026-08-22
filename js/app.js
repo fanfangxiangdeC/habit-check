@@ -134,7 +134,9 @@
     const byId = new Map();
     for (const li of elList.children) byId.set(li.dataset.id, li);
 
-    let prev = null;
+    // 只在位置确实不对时才移动，避免重复调用 after/prepend 触发动画重启（闪烁）
+    const children = elList.children;
+    let index = 0;
     for (const h of habits) {
       let li = byId.get(h.id);
       if (!li) {
@@ -143,12 +145,10 @@
       } else {
         updateCard(li, h);
       }
-      if (prev) {
-        if (li.nextSibling !== prev) prev.after(li);
-      } else if (elList.firstChild !== li) {
-        elList.prepend(li);
+      if (children[index] !== li) {
+        elList.insertBefore(li, children[index] || null);
       }
-      prev = li;
+      index++;
     }
   }
 
@@ -648,3 +648,4 @@
 
   init();
 })();
+
